@@ -1,183 +1,131 @@
-import { Select, Option } from "@mui/joy";
-import { QRCodeSVG } from "qrcode.react";
-import React, { useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { Button } from "@mui/joy";
 import copy from "copy-to-clipboard";
-import { toLower } from "lodash-es";
-import toImage from "../labs/html2image";
-import { useGlobalStore, useMemoStore, useUserStore } from "../store/module";
-import { VISIBILITY_SELECTOR_ITEMS } from "../helpers/consts";
-import * as utils from "../helpers/utils";
-import { getMemoStats } from "../helpers/api";
-import useLoading from "../hooks/useLoading";
-import Icon from "./Icon";
+import React, { useEffect, useRef } from "react";
+import { toast } from "react-hot-toast";
+import { getDateTimeString } from "@/helpers/datetime";
+import useLoading from "@/hooks/useLoading";
+import toImage from "@/labs/html2image";
+import { useUserV1Store } from "@/store/v1";
+import { useTranslate } from "@/utils/i18n";
 import { generateDialog } from "./Dialog";
-import toastHelper from "./Toast";
+import showEmbedMemoDialog from "./EmbedMemoDialog";
+import Icon from "./Icon";
 import MemoContent from "./MemoContent";
-import MemoResources from "./MemoResources";
-import "../less/share-memo-dialog.less";
+import MemoResourceListView from "./MemoResourceListView";
+import UserAvatar from "./UserAvatar";
+import "@/less/share-memo-dialog.less";
 
 interface Props extends DialogProps {
   memo: Memo;
 }
 
-interface State {
-  memoAmount: number;
-  memoVisibility: string;
-}
-
 const ShareMemoDialog: React.FC<Props> = (props: Props) => {
   const { memo: propsMemo, destroy } = props;
-  const { t } = useTranslation();
-  const userStore = useUserStore();
-  const memoStore = useMemoStore();
-  const globalStore = useGlobalStore();
-  const user = userStore.state.user as User;
-  const { systemStatus } = globalStore.state;
-  const [state, setState] = useState<State>({
-    memoAmount: 0,
-    memoVisibility: propsMemo.visibility,
-  });
-  const createLoadingState = useLoading(false);
+  const t = useTranslate();
+  const userV1Store = useUserV1Store();
+  const downloadingImageState = useLoading(false);
   const loadingState = useLoading();
   const memoElRef = useRef<HTMLDivElement>(null);
   const memo = {
     ...propsMemo,
-    createdAtStr: utils.getDateTimeString(propsMemo.createdTs),
+    displayTsStr: getDateTimeString(propsMemo.displayTs),
   };
-  const createdDays = Math.ceil((Date.now() - utils.getTimeStampByDate(user.createdTs)) / 1000 / 3600 / 24);
+  const user = userV1Store.getUserByUsername(memo.creatorUsername);
 
   useEffect(() => {
-    getMemoStats(user.id)
-      .then(({ data: { data } }) => {
-        setState((state) => {
-          return {
-            ...state,
-            memoAmount: data.length,
-          };
-        });
-        loadingState.setFinish();
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    (async () => {
+      await userV1Store.getOrFetchUserByUsername(memo.creatorUsername);
+      loadingState.setFinish();
+    })();
   }, []);
 
   const handleCloseBtnClick = () => {
     destroy();
   };
 
-  const handleDownloadBtnClick = () => {
+  const handleDownloadImageBtnClick = () => {
     if (!memoElRef.current) {
       return;
     }
 
-    createLoadingState.setLoading();
-
+    downloadingImageState.setLoading();
     toImage(memoElRef.current, {
       pixelRatio: window.devicePixelRatio * 2,
     })
       .then((url) => {
         const a = document.createElement("a");
         a.href = url;
-        a.download = `memos-${utils.getDateTimeString(Date.now())}.png`;
+        a.download = `memos-${getDateTimeString(Date.now())}.png`;
         a.click();
 
-        createLoadingState.setFinish();
+        downloadingImageState.setFinish();
       })
       .catch((err) => {
         console.error(err);
       });
   };
 
+  const handleShowEmbedMemoDialog = () => {
+    showEmbedMemoDialog(memo.id);
+  };
+
   const handleCopyLinkBtnClick = () => {
     copy(`${window.location.origin}/m/${memo.id}`);
-    toastHelper.success(t("message.succeed-copy-link"));
+    toast.success(t("message.succeed-copy-link"));
   };
 
-  const memoVisibilityOptionSelectorItems = VISIBILITY_SELECTOR_ITEMS.map((item) => {
-    return {
-      value: item.value,
-      text: t(`memo.visibility.${toLower(item.value)}`),
-    };
-  });
-
-  const handleMemoVisibilityOptionChanged = async (value: string) => {
-    const visibilityValue = value as Visibility;
-    setState({
-      ...state,
-      memoVisibility: visibilityValue,
-    });
-    await memoStore.patchMemo({
-      id: memo.id,
-      visibility: visibilityValue,
-    });
-  };
+  if (loadingState.isLoading) {
+    return null;
+  }
 
   return (
     <>
-      <div className="dialog-header-container">
-        <p className="title-text">{t("common.share")} Memo</p>
+      <div className="dialog-header-container py-3 px-4 !mb-0 rounded-t-lg">
+        <p className="">{t("common.share")} Memo</p>
         <button className="btn close-btn" onClick={handleCloseBtnClick}>
           <Icon.X className="icon-img" />
         </button>
       </div>
-      <div className="dialog-content-container">
-        <div className="memo-container" ref={memoElRef}>
-          <span className="time-text">{memo.createdAtStr}</span>
-          <div className="memo-content-wrapper">
-            <MemoContent content={memo.content} displayConfig={{ enableExpand: false }} />
-            <MemoResources resourceList={memo.resourceList} />
-          </div>
-          <div className="watermark-container">
-            <div className="logo-container">
-              <img className="logo-img" src={`${systemStatus.customizedProfile.logoUrl || "/logo.png"}`} alt="" />
-            </div>
-            <div className="userinfo-container">
-              <span className="name-text">{user.nickname || user.username}</span>
-              <span className="usage-text">
-                {state.memoAmount} MEMOS / {createdDays} DAYS
-              </span>
-            </div>
-            <QRCodeSVG
-              value={`${window.location.origin}/m/${memo.id}`}
-              size={64}
-              bgColor={"#F3F4F6"}
-              fgColor={"#4B5563"}
-              level={"L"}
-              includeMargin={false}
-            />
-          </div>
+      <div className="dialog-content-container w-full flex flex-col justify-start items-start relative">
+        <div className="px-4 pb-3 w-full flex flex-row justify-start items-center space-x-2">
+          <Button color="neutral" variant="outlined" disabled={downloadingImageState.isLoading} onClick={handleDownloadImageBtnClick}>
+            {downloadingImageState.isLoading ? (
+              <Icon.Loader className="w-4 h-auto mr-1 animate-spin" />
+            ) : (
+              <Icon.Download className="w-4 h-auto mr-1" />
+            )}
+            {t("common.image")}
+          </Button>
+          <Button color="neutral" variant="outlined" onClick={handleShowEmbedMemoDialog}>
+            <Icon.Code className="w-4 h-auto mr-1" />
+            {t("memo.embed")}
+          </Button>
+          <Button color="neutral" variant="outlined" onClick={handleCopyLinkBtnClick}>
+            <Icon.Link className="w-4 h-auto mr-1" />
+            {t("common.link")}
+          </Button>
         </div>
-        <div className="px-4 py-3 w-full flex flex-row justify-between items-center">
-          <Select
-            className="!min-w-[10rem] w-auto text-sm"
-            value={state.memoVisibility}
-            onChange={(_, visibility) => {
-              if (visibility) {
-                handleMemoVisibilityOptionChanged(visibility);
-              }
-            }}
+        <div className="w-full border-t dark:border-zinc-700 overflow-clip">
+          <div
+            className="w-full h-auto select-none relative flex flex-col justify-start items-start bg-white dark:bg-zinc-800"
+            ref={memoElRef}
           >
-            {memoVisibilityOptionSelectorItems.map((item) => (
-              <Option key={item.value} value={item.value} className="whitespace-nowrap">
-                {item.text}
-              </Option>
-            ))}
-          </Select>
-          <div className="flex flex-row justify-end items-center">
-            <button disabled={createLoadingState.isLoading} className="btn-normal mr-2" onClick={handleDownloadBtnClick}>
-              {createLoadingState.isLoading ? (
-                <Icon.Loader className="w-4 h-auto mr-1 animate-spin" />
-              ) : (
-                <Icon.Download className="w-4 h-auto mr-1" />
-              )}
-              <span>{t("common.image")}</span>
-            </button>
-            <button className="btn-normal" onClick={handleCopyLinkBtnClick}>
-              <Icon.Link className="w-4 h-auto mr-1" />
-              <span>{t("common.link")}</span>
-            </button>
+            <span className="w-full px-6 pt-5 pb-2 text-sm text-gray-500">{memo.displayTsStr}</span>
+            <div className="w-full px-6 text-base pb-4">
+              <MemoContent content={memo.content} />
+              <MemoResourceListView className="!grid-cols-2" resourceList={memo.resourceList} />
+            </div>
+            <div className="flex flex-row justify-between items-center w-full bg-gray-100 dark:bg-zinc-700 py-4 px-6">
+              <div className="flex flex-row justify-start items-center">
+                <UserAvatar className="mr-2" avatarUrl={user.avatarUrl} />
+                <div className="w-auto grow truncate flex mr-2 flex-col justify-center items-start">
+                  <span className="w-full text truncate font-medium text-gray-600 dark:text-gray-300">
+                    {user.nickname || user.username}
+                  </span>
+                </div>
+              </div>
+              <span className="text-gray-500 dark:text-gray-400">via memos</span>
+            </div>
           </div>
         </div>
       </div>

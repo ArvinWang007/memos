@@ -1,12 +1,12 @@
 import { last } from "lodash-es";
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { toast } from "react-hot-toast";
 import { useSearchParams } from "react-router-dom";
-import * as api from "../helpers/api";
-import toastHelper from "../components/Toast";
-import { absolutifyLink } from "../helpers/utils";
-import { useUserStore } from "../store/module";
-import Icon from "../components/Icon";
+import Icon from "@/components/Icon";
+import * as api from "@/helpers/api";
+import { absolutifyLink } from "@/helpers/utils";
+import { useUserStore } from "@/store/module";
+import { useTranslate } from "@/utils/i18n";
 
 interface State {
   loading: boolean;
@@ -14,7 +14,7 @@ interface State {
 }
 
 const AuthCallback = () => {
-  const { t } = useTranslation();
+  const t = useTranslate();
   const [searchParams] = useSearchParams();
   const userStore = useUserStore();
   const [state, setState] = useState<State>({
@@ -41,7 +41,7 @@ const AuthCallback = () => {
             if (user) {
               window.location.href = "/";
             } else {
-              toastHelper.error(t("message.login-failed"));
+              toast.error(t("message.login-failed"));
             }
           })
           .catch((error: any) => {

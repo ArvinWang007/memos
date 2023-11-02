@@ -1,12 +1,12 @@
-import Emphasis from "./Emphasis";
-import Bold from "./Bold";
 import { marked } from "..";
-import InlineCode from "./InlineCode";
-import BoldEmphasis from "./BoldEmphasis";
-import PlainText from "./PlainText";
 import { matcher } from "../matcher";
+import Bold from "./Bold";
+import BoldEmphasis from "./BoldEmphasis";
+import Emphasis from "./Emphasis";
+import InlineCode from "./InlineCode";
+import PlainText from "./PlainText";
 
-export const LINK_REG = /\[(.*?)\]\((.+?)\)+/;
+export const LINK_REG = /\[([^\]]+)\]\(([^)]+)\)/;
 
 const renderer = (rawStr: string) => {
   const matchResult = matcher(rawStr, LINK_REG);
@@ -15,7 +15,7 @@ const renderer = (rawStr: string) => {
   }
   const parsedContent = marked(matchResult[1], [], [InlineCode, BoldEmphasis, Emphasis, Bold, PlainText]);
   return (
-    <a className="link" target="_blank" rel="noreferrer" href={matchResult[2]}>
+    <a className="link" target="_blank" href={matchResult[2]}>
       {parsedContent}
     </a>
   );

@@ -1,22 +1,20 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { uniqBy } from "lodash-es";
 
 interface State {
   memos: Memo[];
-  isFetching: boolean;
 }
 
 const memoSlice = createSlice({
   name: "memo",
   initialState: {
     memos: [],
-    // isFetching flag should starts with true.
-    isFetching: true,
   } as State,
   reducers: {
-    setMemos: (state, action: PayloadAction<Memo[]>) => {
+    upsertMemos: (state, action: PayloadAction<Memo[]>) => {
       return {
         ...state,
-        memos: action.payload,
+        memos: uniqBy([...action.payload, ...state.memos], "id"),
       };
     },
     createMemo: (state, action: PayloadAction<Memo>) => {
@@ -50,15 +48,9 @@ const memoSlice = createSlice({
         }),
       };
     },
-    setIsFetching: (state, action: PayloadAction<boolean>) => {
-      return {
-        ...state,
-        isFetching: action.payload,
-      };
-    },
   },
 });
 
-export const { setMemos, createMemo, patchMemo, deleteMemo, setIsFetching } = memoSlice.actions;
+export const { upsertMemos, createMemo, patchMemo, deleteMemo } = memoSlice.actions;
 
 export default memoSlice.reducer;

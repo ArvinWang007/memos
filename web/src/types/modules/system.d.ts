@@ -18,11 +18,16 @@ interface SystemStatus {
   dbSize: number;
   // System settings
   allowSignUp: boolean;
+  disablePasswordLogin: boolean;
   disablePublicMemos: boolean;
+  maxUploadSizeMiB: number;
+  autoBackupInterval: number;
   additionalStyle: string;
   additionalScript: string;
   customizedProfile: CustomizedProfile;
   storageServiceId: number;
+  localStoragePath: string;
+  memoDisplayWithUpdatedTs: boolean;
 }
 
 interface SystemSetting {

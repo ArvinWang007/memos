@@ -3,10 +3,6 @@
         "about": "O aplikacji",
         "email": "E-mail",
         "password": "Hasło",
-        "repeat-password-short": "Powtórz",
-        "repeat-password": "Powtórz hasło",
-        "new-password": "Nowe hasło",
-        "repeat-new-password": "Powtórz nowe hasło",
         "avatar": "Awatar",
         "username": "Nazwa użytkownika",
         "nickname": "Pseudonim",
@@ -33,59 +29,34 @@
         "sign-in": "Zaloguj",
         "sign-up": "Utwórz konto",
         "sign-out": "Wyloguj",
-        "back-to-home": "Powrót do Strony Głównej",
         "type": "Typ",
-        "shortcuts": "Skróty",
         "title": "Tytuł",
         "filter": "Filtruj",
         "tags": "Tagi",
         "yourself": "Ty",
-        "archived-at": "Zarchiwizowano",
         "changed": "zmodyfikowano",
-        "update-on": "Aktualizacja dnia",
         "fold": "Zwiń",
         "expand": "Rozwiń",
         "image": "Obrazek",
         "link": "Link",
         "vacuum": "Vacuum",
         "select": "Wybierz",
-        "database": "Baza danych"
+        "database": "Baza danych",
+        "mark": "Mark"
     },
-    "slogan": "Open-source centrum notatek do samodzielnego hostowania z zarządzaniem wiedzą i sieciami społecznościowymi.",
     "auth": {
-        "signup-as-host": "Zarejestruj się jako właściciel",
-        "host-tip": "Rejestrujesz się jako właściciel.",
-        "not-host-tip": "Jeśli nie posiadasz konta skontaktuj się z właścicielem strony."
+        "host-tip": "Rejestrujesz się jako właściciel."
     },
-    "sidebar": {
-        "daily-review": "Podsumowanie dnia",
-        "resources": "Zasoby",
-        "setting": "Ustawienia",
-        "archived": "Zarchiwizowane"
-    },
-    "daily-review": {
-        "oops-nothing": "Ups, nic tu nie ma."
-    },
-    "resources": {
-        "description": "Zobacz statyczne zasoby w notatkach, na przykład obrazki",
+    "resource": {
         "no-resources": "Brak zasobów.",
         "fetching-data": "pobieranie danych...",
-        "upload": "Wrzuć",
-        "preview": "Podgląd",
         "linked-amount": "Liczba kwalifikujących się notatek",
         "copy-link": "Kopiuj odnośnik",
         "delete-resource": "Usuń zasób",
         "warning-text": "Czy na pewno chcesz usunąć zasób? To działanie jest nieodwracalne❗",
-        "rename": "Zmień nazwę",
         "clear": "Wyczyść",
         "warning-text-unused": "Czy na pewno chcesz usunąć nieużywany zasób? To działanie jest nieodwracalne❗",
-        "no-unused-resources": "Brak nieużywanych zasobów",
-        "name": "Nazwa"
-    },
-    "archived": {
-        "archived-memos": "Zarchiwizowane notatki",
-        "no-archived-memos": "Brak zarchiwizowanych notatek.",
-        "fetching-data": "pobieranie danych..."
+        "no-unused-resources": "Brak nieużywanych zasobów"
     },
     "editor": {
         "editing": "Edytowanie...",
@@ -99,7 +70,7 @@
     },
     "memo": {
         "view-detail": "Zobacz szczegóły",
-        "copy": "Kopiuj",
+        "copy-link": "Kopiuj odnośnik",
         "visibility": {
             "private": "Widoczne tylko dla ciebie",
             "protected": "Widoczne dla użytkowników",
@@ -107,47 +78,8 @@
             "disabled": "Publiczne notatki są wyłączone"
         }
     },
-    "memo-list": {
-        "fetching-data": "pobieranie danych...",
-        "fetch-more": "Kliknij, aby pobrać więcej"
-    },
-    "shortcut-list": {
-        "shortcut-title": "krótki tytuł",
-        "create-shortcut": "Utwórz skrót",
-        "edit-shortcut": "Edytuj skrót",
-        "eligible-memo": "kwalifikująca się notatka",
-        "fill-previous": "Proszę uzupełnij poprzednią wartość filtra",
-        "title-required": "Tytuł jest wymagany",
-        "value-required": "Wartość filtra jest wymagana"
-    },
-    "filter": {
-        "new-filter": "Nowy filtr",
-        "type": {
-            "tag": "Tag",
-            "type": "Typ",
-            "text": "Tekst",
-            "display-time": "Wyświetlana data",
-            "visibility": "Widoczność"
-        },
-        "operator": {
-            "contains": "Zawiera",
-            "not-contains": "Nie zawiera",
-            "is": "To",
-            "is-not": "Różny od",
-            "before": "Przed",
-            "after": "Po"
-        },
-        "value": {
-            "not-tagged": "Brak tagów",
-            "linked": "Posiada linki"
-        },
-        "text-placeholder": "Rozpocznij z ^, aby wykorzystać regex"
-    },
     "tag-list": {
         "tip-text": "Wprowadź `#tag` aby utworzyć"
-    },
-    "search": {
-        "quickly-filter": "Szybkie filtry"
     },
     "setting": {
         "my-account": "Moje konto",
@@ -171,7 +103,8 @@
             "mobile-editor-style": "Styl edytora mobilnego",
             "default-memo-sort-option": "Wyświetlana data notatki",
             "created_ts": "Data utworzenia",
-            "updated_ts": "Data aktualizacji"
+            "updated_ts": "Data aktualizacji",
+            "auto-collapse": "Automatyczne zwijanie"
         },
         "storage-section": {
             "storage-services-list": "Lista usług przechowywania",
@@ -196,9 +129,10 @@
             "additional-style": "Dodatkowy styl",
             "additional-script": "Dodatkowy skrypt",
             "additional-style-placeholder": "Dodatkowy kod CSS",
-            "additional-script-placeholder": "Dodatkowy kod JavaScript"
+            "additional-script-placeholder": "Dodatkowy kod JavaScript",
+            "display-with-updated-time": "Display with updated time"
         },
-        "apperance-option": {
+        "appearance-option": {
             "system": "Systemowy",
             "light": "Zawsze jasny",
             "dark": "Zawsze ciemny"
@@ -207,13 +141,9 @@
     "amount-text": {
         "memo_one": "NOTATKA",
         "memo_few": "",
-        "tag_one": "TAG",
-        "tag_few": "",
-        "day_one": "DZIEŃ",
-        "day_few": ""
+        "memo_many": ""
     },
     "message": {
-        "no-memos": "brak notatek 🌃",
         "memos-ready": "wszystkie notatki są gotowe 🎉",
         "restored-successfully": "Pomyślnie przywrócono",
         "memo-updated-datetime": "Zmieniono datę utworzenia notatki.",
@@ -240,10 +170,6 @@
         "click-to-save-the-image": "Kliknij aby zapisać obrazek",
         "generating-the-screenshot": "Generowanie zrzutu ekranu...",
         "count-selected-resources": "Wybrano łącznie",
-        "too-short": "Za krótkie",
-        "too-long": "Za długie",
-        "not-allow-space": "Spacja niedozwolona",
-        "not-allow-chinese": "Chiński niedozwolony",
         "succeed-vacuum-database": "Udało się wyczyścić bazę danych",
         "succeed-update-additional-style": "Udało się zaktualizować dodatkowy styl",
         "succeed-copy-resource-link": "Udało się skopiować link do zasobu do schowka",
@@ -253,19 +179,12 @@
         "page-not-found": "404 - Nie znaleziono 😥"
     },
     "days": {
-        "monday": "Poniedziałek",
         "mon": "Pon",
-        "tuesday": "Wtorek",
         "tue": "Wt",
-        "wednesday": "Środa",
         "wed": "Śr",
-        "thursday": "Czwartek",
         "thu": "Czw",
-        "friday": "Piątek",
         "fri": "Pt",
-        "saturday": "Sobota",
         "sat": "Sob",
-        "sunday": "Niedziela",
         "sun": "Nie"
     }
 }

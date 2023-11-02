@@ -1,20 +1,18 @@
-import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { toast } from "react-hot-toast";
 import { useParams } from "react-router-dom";
-import { UNKNOWN_ID } from "../helpers/consts";
-import { useMemoStore } from "../store/module";
-import useLoading from "../hooks/useLoading";
-import toastHelper from "../components/Toast";
-import MemoContent from "../components/MemoContent";
-import MemoResources from "../components/MemoResources";
+import MemoContent from "@/components/MemoContent";
+import MemoResourceListView from "@/components/MemoResourceListView";
+import { UNKNOWN_ID } from "@/helpers/consts";
+import { getDateTimeString } from "@/helpers/datetime";
+import useLoading from "@/hooks/useLoading";
+import { useMemoStore } from "@/store/module";
 
 interface State {
   memo: Memo;
 }
 
 const EmbedMemo = () => {
-  const { i18n } = useTranslation();
   const params = useParams();
   const memoStore = useMemoStore();
   const [state, setState] = useState<State>({
@@ -36,8 +34,7 @@ const EmbedMemo = () => {
           loadingState.setFinish();
         })
         .catch((error) => {
-          console.error(error);
-          toastHelper.error(error.response.data.message);
+          toast.error(error.response.data.message);
         });
     }
   }, []);
@@ -45,18 +42,18 @@ const EmbedMemo = () => {
   return (
     <section className="w-full h-full flex flex-row justify-start items-start p-2">
       {!loadingState.isLoading && (
-        <main className="w-full max-w-lg mx-auto my-auto shadow px-4 py-4 rounded-lg">
+        <div className="w-full max-w-lg mx-auto my-auto shadow px-4 py-4 rounded-lg">
           <div className="w-full flex flex-col justify-start items-start">
             <div className="w-full mb-2 flex flex-row justify-start items-center text-sm text-gray-400 dark:text-gray-300">
-              <span>{dayjs(state.memo.createdTs).locale(i18n.language).format("YYYY/MM/DD HH:mm:ss")}</span>
-              <a className="ml-2 hover:underline hover:text-green-600" href={`/u/${state.memo.creatorId}`}>
+              <span>{getDateTimeString(state.memo.displayTs)}</span>
+              <a className="ml-2 hover:underline hover:text-green-600" href={`/u/${state.memo.creatorUsername}`}>
                 @{state.memo.creatorName}
               </a>
             </div>
             <MemoContent className="memo-content" content={state.memo.content} onMemoContentClick={() => undefined} />
-            <MemoResources resourceList={state.memo.resourceList} />
+            <MemoResourceListView resourceList={state.memo.resourceList} />
           </div>
-        </main>
+        </div>
       )}
     </section>
   );

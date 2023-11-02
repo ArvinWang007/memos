@@ -1,11 +1,13 @@
-import { useTranslation } from "react-i18next";
-import { useMemoStore } from "../store/module";
-import * as utils from "../helpers/utils";
-import useToggle from "../hooks/useToggle";
-import toastHelper from "./Toast";
+import { Tooltip } from "@mui/joy";
+import { toast } from "react-hot-toast";
+import { getDateTimeString } from "@/helpers/datetime";
+import { useMemoStore } from "@/store/module";
+import { useTranslate } from "@/utils/i18n";
+import { showCommonDialog } from "./Dialog/CommonDialog";
+import Icon from "./Icon";
 import MemoContent from "./MemoContent";
-import MemoResources from "./MemoResources";
-import "../less/memo.less";
+import MemoResourceListView from "./MemoResourceListView";
+import "@/less/memo.less";
 
 interface Props {
   memo: Memo;
@@ -13,21 +15,19 @@ interface Props {
 
 const ArchivedMemo: React.FC<Props> = (props: Props) => {
   const { memo } = props;
-  const { t } = useTranslation();
+  const t = useTranslate();
   const memoStore = useMemoStore();
-  const [showConfirmDeleteBtn, toggleConfirmDeleteBtn] = useToggle(false);
 
   const handleDeleteMemoClick = async () => {
-    if (showConfirmDeleteBtn) {
-      try {
+    showCommonDialog({
+      title: t("memo.delete-memo"),
+      content: t("memo.delete-confirm"),
+      style: "danger",
+      dialogName: "delete-memo-dialog",
+      onConfirm: async () => {
         await memoStore.deleteMemoById(memo.id);
-      } catch (error: any) {
-        console.error(error);
-        toastHelper.error(error.response.data.message);
-      }
-    } else {
-      toggleConfirmDeleteBtn();
-    }
+      },
+    });
   };
 
   const handleRestoreMemoClick = async () => {
@@ -37,37 +37,34 @@ const ArchivedMemo: React.FC<Props> = (props: Props) => {
         rowStatus: "NORMAL",
       });
       await memoStore.fetchMemos();
-      toastHelper.info(t("message.restored-successfully"));
+      toast(t("message.restored-successfully"));
     } catch (error: any) {
       console.error(error);
-      toastHelper.error(error.response.data.message);
-    }
-  };
-
-  const handleMouseLeaveMemoWrapper = () => {
-    if (showConfirmDeleteBtn) {
-      toggleConfirmDeleteBtn(false);
+      toast.error(error.response.data.message);
     }
   };
 
   return (
-    <div className={`memo-wrapper archived ${"memos-" + memo.id}`} onMouseLeave={handleMouseLeaveMemoWrapper}>
+    <div className={`memo-wrapper archived ${"memos-" + memo.id}`}>
       <div className="memo-top-wrapper">
-        <span className="time-text">
-          {t("common.archived-at")} {utils.getDateTimeString(memo.updatedTs)}
-        </span>
-        <div className="btns-container">
-          <span className="btn-text" onClick={handleRestoreMemoClick}>
-            {t("common.restore")}
-          </span>
-          <span className={`btn-text ${showConfirmDeleteBtn ? "final-confirm" : ""}`} onClick={handleDeleteMemoClick}>
-            {t("common.delete")}
-            {showConfirmDeleteBtn ? "!" : ""}
-          </span>
+        <div className="w-full max-w-[calc(100%-20px)] flex flex-row justify-start items-center mr-1">
+          <span className="text-sm text-gray-400 select-none">{getDateTimeString(memo.displayTs)}</span>
+        </div>
+        <div className="flex flex-row justify-end items-center gap-x-2">
+          <Tooltip title={t("common.restore")} placement="top">
+            <button onClick={handleRestoreMemoClick}>
+              <Icon.ArchiveRestore className="w-4 h-auto cursor-pointer text-gray-500 dark:text-gray-400" />
+            </button>
+          </Tooltip>
+          <Tooltip title={t("common.delete")} placement="top">
+            <button onClick={handleDeleteMemoClick} className="text-gray-500 dark:text-gray-400">
+              <Icon.Trash className="w-4 h-auto cursor-pointer" />
+            </button>
+          </Tooltip>
         </div>
       </div>
       <MemoContent content={memo.content} />
-      <MemoResources resourceList={memo.resourceList} />
+      <MemoResourceListView resourceList={memo.resourceList} />
     </div>
   );
 };

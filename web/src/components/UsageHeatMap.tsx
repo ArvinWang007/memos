@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocationStore, useMemoStore, useUserStore } from "../store/module";
-import { useTranslation } from "react-i18next";
-import { getMemoStats } from "../helpers/api";
-import { DAILY_TIMESTAMP } from "../helpers/consts";
-import * as utils from "../helpers/utils";
-import "../less/usage-heat-map.less";
+import { getMemoStats } from "@/helpers/api";
+import { DAILY_TIMESTAMP } from "@/helpers/consts";
+import { getDateStampByDate, getDateString, getTimeStampByDate } from "@/helpers/datetime";
+import * as utils from "@/helpers/utils";
+import useCurrentUser from "@/hooks/useCurrentUser";
+import { useGlobalStore } from "@/store/module";
+import { useUserV1Store } from "@/store/v1";
+import { useTranslate, Translations } from "@/utils/i18n";
+import { useFilterStore, useMemoStore } from "../store/module";
+import "@/less/usage-heat-map.less";
 
 const tableConfig = {
-  width: 12,
+  width: 10,
   height: 7,
 };
 
@@ -28,26 +32,46 @@ interface DailyUsageStat {
 }
 
 const UsageHeatMap = () => {
-  const { t } = useTranslation();
-  const locationStore = useLocationStore();
-  const userStore = useUserStore();
+  const t = useTranslate();
+  const filterStore = useFilterStore();
+  const userV1Store = useUserV1Store();
+  const user = useCurrentUser();
   const memoStore = useMemoStore();
-  const todayTimeStamp = utils.getDateStampByDate(Date.now());
-  const todayDay = new Date(todayTimeStamp).getDay() + 1;
+  const todayTimeStamp = getDateStampByDate(Date.now());
+  const weekDay = new Date(todayTimeStamp).getDay();
+  const weekFromMonday = ["zh-Hans", "ko"].includes(useGlobalStore().state.locale);
+  const dayTips = weekFromMonday ? ["mon", "", "wed", "", "fri", "", "sun"] : ["sun", "", "tue", "", "thu", "", "sat"];
+  const todayDay = weekFromMonday ? (weekDay == 0 ? 7 : weekDay) : weekDay + 1;
   const nullCell = new Array(7 - todayDay).fill(0);
   const usedDaysAmount = (tableConfig.width - 1) * tableConfig.height + todayDay;
   const beginDayTimestamp = todayTimeStamp - usedDaysAmount * DAILY_TIMESTAMP;
   const memos = memoStore.state.memos;
+  const [memoAmount, setMemoAmount] = useState(0);
+  const [createdDays, setCreatedDays] = useState(0);
   const [allStat, setAllStat] = useState<DailyUsageStat[]>(getInitialUsageStat(usedDaysAmount, beginDayTimestamp));
   const [currentStat, setCurrentStat] = useState<DailyUsageStat | null>(null);
   const containerElRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getMemoStats(userStore.getCurrentUserId())
-      .then(({ data: { data } }) => {
+    userV1Store.getOrFetchUserByUsername(user.username).then((user) => {
+      if (!user) {
+        return;
+      }
+      setCreatedDays(Math.ceil((Date.now() - getTimeStampByDate(user.createTime)) / 1000 / 3600 / 24));
+    });
+  }, [user.username]);
+
+  useEffect(() => {
+    if (memos.length === 0) {
+      return;
+    }
+
+    getMemoStats(user.username)
+      .then(({ data }) => {
+        setMemoAmount(data.length);
         const newStat: DailyUsageStat[] = getInitialUsageStat(usedDaysAmount, beginDayTimestamp);
         for (const record of data) {
-          const index = (utils.getDateStampByDate(record * 1000) - beginDayTimestamp) / (1000 * 3600 * 24) - 1;
+          const index = (getDateStampByDate(record * 1000) - beginDayTimestamp) / (1000 * 3600 * 24) - 1;
           if (index >= 0) {
             // because of dailight savings, some days may be 23 hours long instead of 24 hours long
             // this causes the calculations to yield weird indices such as 40.93333333333
@@ -61,11 +85,7 @@ const UsageHeatMap = () => {
       .catch((error) => {
         console.error(error);
       });
-
-    return () => {
-      handleUsageStatItemMouseLeave();
-    };
-  }, [memos.length]);
+  }, [memos.length, user.username]);
 
   const handleUsageStatItemMouseEnter = useCallback((event: React.MouseEvent, item: DailyUsageStat) => {
     const tempDiv = document.createElement("div");
@@ -73,7 +93,8 @@ const UsageHeatMap = () => {
     const bounding = utils.getElementBounding(event.target as HTMLElement);
     tempDiv.style.left = bounding.left + "px";
     tempDiv.style.top = bounding.top - 2 + "px";
-    tempDiv.innerHTML = `${item.count} memos on <span className="date-text">${new Date(item.timestamp as number).toDateString()}</span>`;
+    const tMemoOnOpts = { amount: item.count, date: getDateString(item.timestamp as number) };
+    tempDiv.innerHTML = item.count === 1 ? t("heatmap.memo-on", tMemoOnOpts) : t("heatmap.memos-on", tMemoOnOpts);
     document.body.appendChild(tempDiv);
 
     if (tempDiv.offsetLeft - tempDiv.clientWidth / 2 < 0) {
@@ -87,63 +108,73 @@ const UsageHeatMap = () => {
   }, []);
 
   const handleUsageStatItemClick = useCallback((item: DailyUsageStat) => {
-    if (locationStore.getState().query?.duration?.from === item.timestamp) {
-      locationStore.setFromAndToQuery();
+    if (filterStore.getState().duration?.from === item.timestamp) {
+      filterStore.setFromAndToFilter();
       setCurrentStat(null);
     } else if (item.count > 0) {
-      locationStore.setFromAndToQuery(item.timestamp, item.timestamp + DAILY_TIMESTAMP);
+      filterStore.setFromAndToFilter(item.timestamp, item.timestamp + DAILY_TIMESTAMP);
       setCurrentStat(item);
     }
   }, []);
 
-  return (
-    <div className="usage-heat-map-wrapper" ref={containerElRef}>
-      <div className="day-tip-text-container">
-        <span className="tip-text">{t("days.sun")}</span>
-        <span className="tip-text"></span>
-        <span className="tip-text">{t("days.tue")}</span>
-        <span className="tip-text"></span>
-        <span className="tip-text">{t("days.thu")}</span>
-        <span className="tip-text"></span>
-        <span className="tip-text">{t("days.sat")}</span>
-      </div>
-      <div className="usage-heat-map">
-        {allStat.map((v, i) => {
-          const count = v.count;
-          const colorLevel =
-            count <= 0
-              ? ""
-              : count <= 1
-              ? "stat-day-l1-bg"
-              : count <= 2
-              ? "stat-day-l2-bg"
-              : count <= 4
-              ? "stat-day-l3-bg"
-              : "stat-day-l4-bg";
+  // This interpolation is not being used because of the current styling,
+  // but it can improve translation quality by giving it a more meaningful context
+  const tMemoInOpts = { amount: memoAmount, period: "", date: "" };
 
-          return (
-            <div
-              className="stat-wrapper"
-              key={i}
-              onMouseEnter={(e) => handleUsageStatItemMouseEnter(e, v)}
-              onMouseLeave={handleUsageStatItemMouseLeave}
-              onClick={() => handleUsageStatItemClick(v)}
-            >
-              <span
-                className={`stat-container ${colorLevel} ${currentStat === v ? "current" : ""} ${
-                  todayTimeStamp === v.timestamp ? "today" : ""
-                }`}
-              ></span>
+  return (
+    <>
+      <div className="usage-heat-map-wrapper" ref={containerElRef}>
+        <div className="usage-heat-map">
+          {allStat.map((v, i) => {
+            const count = v.count;
+            const colorLevel =
+              count <= 0
+                ? ""
+                : count <= 1
+                ? "stat-day-l1-bg"
+                : count <= 2
+                ? "stat-day-l2-bg"
+                : count <= 4
+                ? "stat-day-l3-bg"
+                : "stat-day-l4-bg";
+
+            return (
+              <div
+                className="stat-wrapper"
+                key={i}
+                onMouseEnter={(e) => handleUsageStatItemMouseEnter(e, v)}
+                onMouseLeave={handleUsageStatItemMouseLeave}
+                onClick={() => handleUsageStatItemClick(v)}
+              >
+                <span
+                  className={`stat-container ${colorLevel} ${currentStat === v ? "current" : ""} ${
+                    todayTimeStamp === v.timestamp ? "today" : ""
+                  }`}
+                ></span>
+              </div>
+            );
+          })}
+          {nullCell.map((_, i) => (
+            <div className="stat-wrapper" key={i}>
+              <span className="stat-container null"></span>
             </div>
-          );
-        })}
-        {nullCell.map((_, i) => (
-          <div className="stat-wrapper" key={i}>
-            <span className="null"></span>
-          </div>
-        ))}
+          ))}
+        </div>
+        <div className="day-tip-text-container">
+          {dayTips.map((v, i) => (
+            <span className="tip-text" key={i}>
+              {v && t(("days." + v) as Translations)}
+            </span>
+          ))}
+        </div>
       </div>
-    </div>
+      <p className="w-full pl-4 text-xs -mt-2 mb-3 text-gray-400 dark:text-zinc-400">
+        <span className="font-medium text-gray-500 dark:text-zinc-300 number">{memoAmount} </span>
+        {memoAmount === 1 ? t("heatmap.memo-in", tMemoInOpts) : t("heatmap.memos-in", tMemoInOpts)}{" "}
+        <span className="font-medium text-gray-500 dark:text-zinc-300">{createdDays} </span>
+        {createdDays === 1 ? t("heatmap.day", tMemoInOpts) : t("heatmap.days", tMemoInOpts)}
+      </p>
+    </>
   );
 };
 

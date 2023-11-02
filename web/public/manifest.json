@@ -1,12 +1,11 @@
 {
-  "short_name": "Memos",
-  "name": "Memos",
+  "short_name": "memos",
+  "name": "memos",
   "description": "usememos/memos",
   "icons": [
     {
       "src": "/logo.png",
-      "type": "image/png",
-      "sizes": "520x520"
+      "type": "image/png"
     }
   ],
   "start_url": "/",

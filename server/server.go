@@ -2,131 +2,120 @@ package server
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-	"github.com/usememos/memos/api"
-	metric "github.com/usememos/memos/plugin/metrics"
-	"github.com/usememos/memos/server/profile"
-	"github.com/usememos/memos/store"
-	"github.com/usememos/memos/store/db"
-
-	"github.com/gorilla/sessions"
-	"github.com/labstack/echo-contrib/session"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/pkg/errors"
+	echoSwagger "github.com/swaggo/echo-swagger"
+
+	apiv1 "github.com/usememos/memos/api/v1"
+	apiv2 "github.com/usememos/memos/api/v2"
+	"github.com/usememos/memos/plugin/telegram"
+	"github.com/usememos/memos/server/integration"
+	"github.com/usememos/memos/server/profile"
+	"github.com/usememos/memos/server/service/backup"
+	"github.com/usememos/memos/server/service/metric"
+	"github.com/usememos/memos/store"
 )
 
 type Server struct {
-	e  *echo.Echo
-	db *sql.DB
+	e *echo.Echo
 
-	ID        string
-	Profile   *profile.Profile
-	Store     *store.Store
-	Collector *MetricCollector
+	ID      string
+	Secret  string
+	Profile *profile.Profile
+	Store   *store.Store
+
+	// API services.
+	apiV2Service *apiv2.APIV2Service
+
+	// Asynchronous runners.
+	backupRunner *backup.BackupRunner
+	telegramBot  *telegram.Bot
 }
 
-func NewServer(ctx context.Context, profile *profile.Profile) (*Server, error) {
+func NewServer(ctx context.Context, profile *profile.Profile, store *store.Store) (*Server, error) {
 	e := echo.New()
 	e.Debug = true
 	e.HideBanner = true
 	e.HidePort = true
 
-	db := db.NewDB(profile)
-	if err := db.Open(ctx); err != nil {
-		return nil, errors.Wrap(err, "cannot open db")
-	}
-
 	s := &Server{
 		e:       e,
-		db:      db.DBInstance,
+		Store:   store,
 		Profile: profile,
+
+		// Asynchronous runners.
+		backupRunner: backup.NewBackupRunner(store),
+		telegramBot:  telegram.NewBotWithHandler(integration.NewTelegramHandler(store)),
 	}
-	storeInstance := store.New(db.DBInstance, profile)
-	s.Store = storeInstance
 
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
-		Format: `{"time":"${time_rfc3339}",` +
+		Format: `{"time":"${time_rfc3339}","latency":"${latency_human}",` +
 			`"method":"${method}","uri":"${uri}",` +
 			`"status":${status},"error":"${error}"}` + "\n",
 	}))
 
 	e.Use(middleware.Gzip())
 
-	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
-		Skipper:     s.defaultAuthSkipper,
-		TokenLookup: "cookie:_csrf",
-	}))
-
-	e.Use(middleware.CORS())
-
-	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		Skipper:            defaultGetRequestSkipper,
-		XSSProtection:      "1; mode=block",
-		ContentTypeNosniff: "nosniff",
-		XFrameOptions:      "SAMEORIGIN",
-		HSTSPreloadEnabled: false,
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		Skipper:      grpcRequestSkipper,
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPatch, http.MethodPost, http.MethodDelete},
 	}))
 
 	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
-		ErrorMessage: "Request timeout",
-		Timeout:      30 * time.Second,
+		Skipper: grpcRequestSkipper,
+		Timeout: 30 * time.Second,
 	}))
 
 	serverID, err := s.getSystemServerID(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to retrieve system server ID")
 	}
 	s.ID = serverID
 
-	secretSessionName := "usememos"
-	if profile.Mode == "prod" {
-		secretSessionName, err = s.getSystemSecretSessionName(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-	e.Use(session.Middleware(sessions.NewCookieStore([]byte(secretSessionName))))
-
+	// Serve frontend.
 	embedFrontend(e)
 
-	// Register MetricCollector to server.
-	s.registerMetricCollector()
+	// Serve swagger in dev/demo mode.
+	if profile.Mode == "dev" || profile.Mode == "demo" {
+		e.GET("/api/*", echoSwagger.WrapHandler)
+	}
+
+	secret := "usememos"
+	if profile.Mode == "prod" {
+		secret, err = s.getSystemSecretSessionName(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to retrieve system secret session name")
+		}
+	}
+	s.Secret = secret
 
 	rootGroup := e.Group("")
-	s.registerRSSRoutes(rootGroup)
+	apiV1Service := apiv1.NewAPIV1Service(s.Secret, profile, store, s.telegramBot)
+	apiV1Service.Register(rootGroup)
 
-	publicGroup := e.Group("/o")
-	s.registerResourcePublicRoutes(publicGroup)
-	registerGetterPublicRoutes(publicGroup)
-
-	apiGroup := e.Group("/api")
-	apiGroup.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return aclMiddleware(s, next)
-	})
-	s.registerSystemRoutes(apiGroup)
-	s.registerAuthRoutes(apiGroup)
-	s.registerUserRoutes(apiGroup)
-	s.registerMemoRoutes(apiGroup)
-	s.registerShortcutRoutes(apiGroup)
-	s.registerResourceRoutes(apiGroup)
-	s.registerTagRoutes(apiGroup)
-	s.registerStorageRoutes(apiGroup)
-	s.registerIdentityProviderRoutes(apiGroup)
+	s.apiV2Service = apiv2.NewAPIV2Service(s.Secret, profile, store, s.Profile.Port+1)
+	// Register gRPC gateway as api v2.
+	if err := s.apiV2Service.RegisterGateway(ctx, e); err != nil {
+		return nil, errors.Wrap(err, "failed to register gRPC gateway")
+	}
 
 	return s, nil
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	if err := s.createServerStartActivity(ctx); err != nil {
-		return errors.Wrap(err, "failed to create activity")
-	}
-	s.Collector.Identify(ctx)
-	return s.e.Start(fmt.Sprintf(":%d", s.Profile.Port))
+	go s.telegramBot.Start(ctx)
+	go s.backupRunner.Run(ctx)
+
+	metric.Enqueue("server start")
+	return s.e.Start(fmt.Sprintf("%s:%d", s.Profile.Addr, s.Profile.Port))
 }
 
 func (s *Server) Shutdown(ctx context.Context) {
@@ -139,33 +128,55 @@ func (s *Server) Shutdown(ctx context.Context) {
 	}
 
 	// Close database connection
-	if err := s.db.Close(); err != nil {
+	if err := s.Store.Close(); err != nil {
 		fmt.Printf("failed to close database, error: %v\n", err)
 	}
 
 	fmt.Printf("memos stopped properly\n")
 }
 
-func (s *Server) createServerStartActivity(ctx context.Context) error {
-	payload := api.ActivityServerStartPayload{
-		ServerID: s.ID,
-		Profile:  s.Profile,
-	}
-	payloadBytes, err := json.Marshal(payload)
+func (s *Server) GetEcho() *echo.Echo {
+	return s.e
+}
+
+func (s *Server) getSystemServerID(ctx context.Context) (string, error) {
+	serverIDSetting, err := s.Store.GetSystemSetting(ctx, &store.FindSystemSetting{
+		Name: apiv1.SystemSettingServerIDName.String(),
+	})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal activity payload")
+		return "", err
 	}
-	activity, err := s.Store.CreateActivity(ctx, &api.ActivityCreate{
-		CreatorID: api.UnknownID,
-		Type:      api.ActivityServerStart,
-		Level:     api.ActivityInfo,
-		Payload:   string(payloadBytes),
-	})
-	if err != nil || activity == nil {
-		return errors.Wrap(err, "failed to create activity")
+	if serverIDSetting == nil || serverIDSetting.Value == "" {
+		serverIDSetting, err = s.Store.UpsertSystemSetting(ctx, &store.SystemSetting{
+			Name:  apiv1.SystemSettingServerIDName.String(),
+			Value: uuid.NewString(),
+		})
+		if err != nil {
+			return "", err
+		}
 	}
-	s.Collector.Collect(ctx, &metric.Metric{
-		Name: string(activity.Type),
+	return serverIDSetting.Value, nil
+}
+
+func (s *Server) getSystemSecretSessionName(ctx context.Context) (string, error) {
+	secretSessionNameValue, err := s.Store.GetSystemSetting(ctx, &store.FindSystemSetting{
+		Name: apiv1.SystemSettingSecretSessionName.String(),
 	})
-	return err
+	if err != nil {
+		return "", err
+	}
+	if secretSessionNameValue == nil || secretSessionNameValue.Value == "" {
+		secretSessionNameValue, err = s.Store.UpsertSystemSetting(ctx, &store.SystemSetting{
+			Name:  apiv1.SystemSettingSecretSessionName.String(),
+			Value: uuid.NewString(),
+		})
+		if err != nil {
+			return "", err
+		}
+	}
+	return secretSessionNameValue.Value, nil
+}
+
+func grpcRequestSkipper(c echo.Context) bool {
+	return strings.HasPrefix(c.Request().URL.Path, "/memos.api.v2.")
 }

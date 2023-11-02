@@ -1,70 +1,23 @@
-import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { useLocation } from "react-router-dom";
-import { useGlobalStore, useUserStore } from "../store/module";
-import toastHelper from "../components/Toast";
-import Sidebar from "../components/Sidebar";
-import MemosHeader from "../components/MemosHeader";
-import MemoEditor from "../components/MemoEditor";
-import MemoFilter from "../components/MemoFilter";
-import MemoList from "../components/MemoList";
-import UpdateVersionBanner from "../components/UpdateVersionBanner";
-import "../less/home.less";
+import HomeSidebar from "@/components/HomeSidebar";
+import MemoEditor from "@/components/MemoEditor";
+import MemoFilter from "@/components/MemoFilter";
+import MemoList from "@/components/MemoList";
+import MobileHeader from "@/components/MobileHeader";
 
-function Home() {
-  const { t } = useTranslation();
-  const location = useLocation();
-  const globalStore = useGlobalStore();
-  const userStore = useUserStore();
-  const user = userStore.state.user;
-
-  useEffect(() => {
-    const { owner } = userStore.getState();
-
-    if (userStore.isVisitorMode()) {
-      if (!owner) {
-        toastHelper.error(t("message.user-not-found"));
-      }
-    }
-  }, [location]);
-
-  useEffect(() => {
-    if (user?.setting.locale) {
-      globalStore.setLocale(user.setting.locale);
-    }
-  }, [user?.setting.locale]);
-
+const Home = () => {
   return (
-    <section className="page-wrapper home">
-      <div className="banner-wrapper">
-        <UpdateVersionBanner />
+    <div className="@container w-full flex flex-row justify-start items-start">
+      <div className="w-full px-4 @lg:max-w-[calc(100%-14rem)] sm:px-2 sm:pt-4">
+        <MobileHeader />
+        <div className="w-full h-auto flex flex-col justify-start items-start bg-zinc-100 dark:bg-zinc-800 rounded-lg">
+          <MemoEditor className="mb-2" cacheKey="home-memo-editor" />
+          <MemoFilter />
+        </div>
+        <MemoList />
       </div>
-      <div className="page-container">
-        <Sidebar />
-        <main className="memos-wrapper">
-          <MemosHeader />
-          <div className="memos-editor-wrapper">
-            {!userStore.isVisitorMode() && <MemoEditor />}
-            <MemoFilter />
-          </div>
-          <MemoList />
-          {userStore.isVisitorMode() && (
-            <div className="addition-btn-container">
-              {user ? (
-                <button className="btn" onClick={() => (window.location.href = "/")}>
-                  <span className="icon">🏠</span> {t("common.back-to-home")}
-                </button>
-              ) : (
-                <button className="btn" onClick={() => (window.location.href = "/auth")}>
-                  <span className="icon">👉</span> {t("common.sign-in")}
-                </button>
-              )}
-            </div>
-          )}
-        </main>
-      </div>
-    </section>
+      <HomeSidebar />
+    </div>
   );
-}
+};
 
 export default Home;

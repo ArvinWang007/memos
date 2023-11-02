@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/usememos/memos/plugin/idp"
 	"github.com/usememos/memos/store"
 )
@@ -90,11 +91,10 @@ func newMockServer(t *testing.T, code, accessToken string, userinfo []byte) *htt
 
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(map[string]any{
-			"access_token":  accessToken,
-			"token_type":    "Bearer",
-			"refresh_token": "test-refresh-token",
-			"expires_in":    3600,
-			"id_token":      rawIDToken,
+			"access_token": accessToken,
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+			"id_token":     rawIDToken,
 		})
 		require.NoError(t, err)
 	})

@@ -24,6 +24,7 @@ module.exports = {
       },
       zIndex: {
         1: "1",
+        2: "2",
         20: "20",
         100: "100",
         1000: "1000",
@@ -33,4 +34,5 @@ module.exports = {
       },
     },
   },
+  plugins: [require("@tailwindcss/container-queries")],
 };

@@ -1,26 +1,33 @@
+import { camelCase } from "lodash-es";
+import * as api from "@/helpers/api";
+import storage from "@/helpers/storage";
+import { getSystemColorScheme } from "@/helpers/utils";
 import store, { useAppSelector } from "..";
-import * as api from "../../helpers/api";
-import * as storage from "../../helpers/storage";
-import { UNKNOWN_ID } from "../../helpers/consts";
-import { getSystemColorScheme } from "../../helpers/utils";
 import { setAppearance, setLocale } from "../reducer/global";
-import { setUser, patchUser, setHost, setOwner } from "../reducer/user";
+import { patchUser, setHost, setUser } from "../reducer/user";
 
 const defaultSetting: Setting = {
   locale: "en",
   appearance: getSystemColorScheme(),
   memoVisibility: "PRIVATE",
-  resourceVisibility: "PRIVATE",
+  telegramUserId: "",
 };
 
 const defaultLocalSetting: LocalSetting = {
-  enableFoldMemo: true,
-  enableDoubleClickEditing: true,
+  enableDoubleClickEditing: false,
+  dailyReviewTimeOffset: 0,
 };
 
 export const convertResponseModelUser = (user: User): User => {
+  // user default 'Basic Setting' should follow server's setting
+  // 'Basic Setting' fields: locale, appearance
+  const { systemStatus } = store.getState().global;
+  const { locale, appearance } = systemStatus.customizedProfile;
+  const systemSetting = { locale, appearance };
+
   const setting: Setting = {
     ...defaultSetting,
+    ...systemSetting,
   };
   const { localSetting: storageLocalSetting } = storage.get(["localSetting"]);
   const localSetting: LocalSetting = {
@@ -30,7 +37,7 @@ export const convertResponseModelUser = (user: User): User => {
 
   if (user.userSettingList) {
     for (const userSetting of user.userSettingList) {
-      (setting as any)[userSetting.key] = JSON.parse(userSetting.value);
+      (setting as any)[camelCase(userSetting.key)] = JSON.parse(userSetting.value);
     }
   }
 
@@ -50,15 +57,7 @@ export const initialUserState = async () => {
     store.dispatch(setHost(convertResponseModelUser(systemStatus.host)));
   }
 
-  const ownerUserId = getUserIdFromPath();
-  if (ownerUserId) {
-    const { data: owner } = (await api.getUserById(ownerUserId)).data;
-    if (owner) {
-      store.dispatch(setOwner(convertResponseModelUser(owner)));
-    }
-  }
-
-  const { data } = (await api.getMyselfUser()).data;
+  const { data } = await api.getMyselfUser();
   if (data) {
     const user = convertResponseModelUser(data);
     store.dispatch(setUser(user));
@@ -68,21 +67,12 @@ export const initialUserState = async () => {
     if (user.setting.appearance) {
       store.dispatch(setAppearance(user.setting.appearance));
     }
+    return user;
   }
-};
-
-const getUserIdFromPath = () => {
-  const { pathname } = store.getState().location;
-  const userIdRegex = /^\/u\/(\d+).*/;
-  const result = pathname.match(userIdRegex);
-  if (result && result.length === 2) {
-    return Number(result[1]);
-  }
-  return undefined;
 };
 
 const doSignIn = async () => {
-  const { data: user } = (await api.getMyselfUser()).data;
+  const { data: user } = await api.getMyselfUser();
   if (user) {
     store.dispatch(setUser(convertResponseModelUser(user)));
   } else {
@@ -98,35 +88,14 @@ const doSignOut = async () => {
 export const useUserStore = () => {
   const state = useAppSelector((state) => state.user);
 
-  const isVisitorMode = () => {
-    return !(getUserIdFromPath() === undefined);
-  };
-
   return {
     state,
     getState: () => {
       return store.getState().user;
     },
-    isVisitorMode,
-    getUserIdFromPath,
     doSignIn,
     doSignOut,
-    getCurrentUserId: () => {
-      if (isVisitorMode()) {
-        return getUserIdFromPath() || UNKNOWN_ID;
-      } else {
-        return state.user?.id || UNKNOWN_ID;
-      }
-    },
-    getUserById: async (userId: UserId) => {
-      const { data: user } = (await api.getUserById(userId)).data;
-      if (user) {
-        return convertResponseModelUser(user);
-      } else {
-        return undefined;
-      }
-    },
-    upsertUserSetting: async (key: keyof Setting, value: any) => {
+    upsertUserSetting: async (key: string, value: any) => {
       await api.upsertUserSetting({
         key: key as any,
         value: JSON.stringify(value),
@@ -138,10 +107,10 @@ export const useUserStore = () => {
       store.dispatch(patchUser({ localSetting }));
     },
     patchUser: async (userPatch: UserPatch): Promise<void> => {
-      const { data } = (await api.patchUser(userPatch)).data;
-      if (userPatch.id === store.getState().user.user?.id) {
-        const user = convertResponseModelUser(data);
-        store.dispatch(patchUser(user));
+      await api.patchUser(userPatch);
+      // If the user is the current user and the username is changed, reload the page.
+      if (userPatch.id === store.getState().user.user?.id && userPatch.username) {
+        window.location.reload();
       }
     },
     deleteUser: async (userDelete: UserDelete) => {
